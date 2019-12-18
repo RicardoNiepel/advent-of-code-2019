@@ -66,3 +66,14 @@ RUN apt-get update \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/* /go/src
+
+# Install custom Go tools
+RUN go get -u -v \
+    # testify
+    github.com/stretchr/testify 2>&1
+
+# Enable Go Modules.
+# ENV GO111MODULE=on
+
+# Switch back to dialog for any ad-hoc use of apt-get
+ENV DEBIAN_FRONTEND=dialog
