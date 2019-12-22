@@ -48,7 +48,45 @@ func Test_partone_main(t *testing.T) {
 	phaseSetting, thrusterSignal := getAmplifierSeriesMaxThrusterSignal(input)
 
 	assert.Equal(t, "0,2,4,3,1", phaseSetting)
-	assert.Equal(t, "567045", thrusterSignal) // your answer is too low
+	assert.Equal(t, "567045", thrusterSignal)
+}
+
+func Test_parttwo_small(t *testing.T) {
+	tests := []struct {
+		inputIntcode              string
+		expectedPhaseSetting      string
+		expectedMaxThrusterSignal string
+	}{
+		{
+			"3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5",
+			"9,8,7,6,5",
+			"139629729",
+		},
+		{
+			"3,52,1001,52,-5,52,3,53,1,52,56,54,1007,54,5,55,1005,55,26,1001,54,-5,54,1105,1,12,1,53,54,53,1008,54,0,55,1001,55,1,55,2,53,55,53,4,53,1001,56,-1,56,1005,56,6,99,0,0,0,0,10",
+			"9,7,8,5,6",
+			"18216",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.inputIntcode), func(t *testing.T) {
+			phaseSetting, thrusterSignal := getAmplifierSeriesWithFeedbackLoopMaxThrusterSignal(tt.inputIntcode)
+			assert.Equal(t, tt.expectedPhaseSetting, phaseSetting)
+			assert.Equal(t, tt.expectedMaxThrusterSignal, thrusterSignal)
+		})
+	}
+}
+
+func Test_parttwo_main(t *testing.T) {
+	dat, err := ioutil.ReadFile("input.txt")
+	if err != nil {
+		panic(err)
+	}
+	input := string(dat)
+	phaseSetting, thrusterSignal := getAmplifierSeriesWithFeedbackLoopMaxThrusterSignal(input)
+
+	assert.Equal(t, "6,5,7,8,9", phaseSetting)
+	assert.Equal(t, "39016654", thrusterSignal)
 }
 
 func Test_day5_partone_small(t *testing.T) {

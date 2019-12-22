@@ -6,6 +6,59 @@ import (
 	"strings"
 )
 
+func getAmplifierSeriesWithFeedbackLoopMaxThrusterSignal(intcode string) (phaseSetting string, thrusterSignal string) {
+	possiblePhaseSettings := []string{"5", "6", "7", "8", "9"}
+
+	var currentPhaseSetting []string
+
+	for _, a := range possiblePhaseSettings {
+		currentPhaseSetting = []string{a}
+
+		for _, b := range possiblePhaseSettings {
+			if contains(&currentPhaseSetting, b) {
+				continue
+			}
+			currentPhaseSetting = append(currentPhaseSetting, b)
+
+			for _, c := range possiblePhaseSettings {
+				if contains(&currentPhaseSetting, c) {
+					continue
+				}
+				currentPhaseSetting = append(currentPhaseSetting, c)
+
+				for _, d := range possiblePhaseSettings {
+					if contains(&currentPhaseSetting, d) {
+						continue
+					}
+					currentPhaseSetting = append(currentPhaseSetting, d)
+
+					for _, e := range possiblePhaseSettings {
+						if contains(&currentPhaseSetting, e) {
+							continue
+						}
+						currentPhaseSetting = append(currentPhaseSetting, e)
+
+						thrusterSignalTmp := runAmplifierSeries(intcode, currentPhaseSetting...)
+						tst, _ := strconv.Atoi(thrusterSignalTmp)
+						ts, _ := strconv.Atoi(thrusterSignal)
+						if tst > ts {
+							phaseSetting = strings.Join(currentPhaseSetting, ",")
+							thrusterSignal = thrusterSignalTmp
+						}
+
+						remove(&currentPhaseSetting, len(currentPhaseSetting)-1)
+					}
+					remove(&currentPhaseSetting, len(currentPhaseSetting)-1)
+				}
+				remove(&currentPhaseSetting, len(currentPhaseSetting)-1)
+			}
+			remove(&currentPhaseSetting, len(currentPhaseSetting)-1)
+		}
+	}
+
+	return
+}
+
 func getAmplifierSeriesMaxThrusterSignal(intcode string) (phaseSetting string, thrusterSignal string) {
 	possiblePhaseSettings := []string{"0", "1", "2", "3", "4"}
 
@@ -74,24 +127,60 @@ func remove(arr *[]string, index int) {
 }
 
 func runAmplifierSeries(intcode string, phaseSetting ...string) (thrusterSignal string) {
+
 	ampA := newIntcodeProgram(intcode)
 	ampB := newIntcodeProgram(intcode)
 	ampC := newIntcodeProgram(intcode)
 	ampD := newIntcodeProgram(intcode)
 	ampE := newIntcodeProgram(intcode)
 
-	outputA := ampA.execute(phaseSetting[0], "0")
-	outputB := ampB.execute(phaseSetting[1], outputA)
-	outputC := ampC.execute(phaseSetting[2], outputB)
-	outputD := ampD.execute(phaseSetting[3], outputC)
-	outputE := ampE.execute(phaseSetting[4], outputD)
-	return outputE
+	inputAChan := make(chan string, 2)
+	outputAChan := make(chan string, 1)
+	outputBChan := make(chan string, 1)
+	outputCChan := make(chan string, 1)
+	outputDChan := make(chan string, 1)
+	doneA := make(chan bool, 1)
+	doneB := make(chan bool, 1)
+	doneC := make(chan bool, 1)
+	doneD := make(chan bool, 1)
+	doneE := make(chan bool, 1)
+
+	inputAChan <- phaseSetting[0]
+	inputAChan <- "0"
+	outputAChan <- phaseSetting[1]
+	outputBChan <- phaseSetting[2]
+	outputCChan <- phaseSetting[3]
+	outputDChan <- phaseSetting[4]
+
+	go ampA.execute(inputAChan, outputAChan, doneA)
+	go ampB.execute(outputAChan, outputBChan, doneB)
+	go ampC.execute(outputBChan, outputCChan, doneC)
+	go ampD.execute(outputCChan, outputDChan, doneD)
+	go ampE.execute(outputDChan, inputAChan, doneE)
+
+	<-doneE
+	return <-inputAChan
 }
 
 func run(intcode string, inputs ...string) (finalIntcode string, output string) {
 	intcodeProgram := newIntcodeProgram(intcode)
 
-	output = intcodeProgram.execute(inputs...)
+	inputChan := make(chan string)
+	for _, i := range inputs {
+		go func() { inputChan <- i }()
+	}
+
+	outputChan := make(chan string, 100)
+	done := make(chan bool, 1)
+	go intcodeProgram.execute(inputChan, outputChan, done)
+	<-done
+
+	var outputs []string
+	for len(outputChan) > 0 {
+		outputs = append(outputs, <-outputChan)
+	}
+	output = strings.Join(outputs, "\n")
+
 	finalIntcode = intcodeProgram.currentProgram
 	return
 }
@@ -99,7 +188,22 @@ func run(intcode string, inputs ...string) (finalIntcode string, output string) 
 func runWithNounVerb(intcode string, noun int, verb int, inputs ...string) (finalIntcode string, output string) {
 	intcodeProgram := newIntcodeProgramWithNounVerb(intcode, noun, verb)
 
-	output = intcodeProgram.execute(inputs...)
+	inputChan := make(chan string)
+	for _, i := range inputs {
+		go func() { inputChan <- i }()
+	}
+
+	outputChan := make(chan string, 100)
+	done := make(chan bool, 1)
+	go intcodeProgram.execute(inputChan, outputChan, done)
+	<-done
+
+	var outputs []string
+	for len(outputChan) > 0 {
+		outputs = append(outputs, <-outputChan)
+	}
+	output = strings.Join(outputs, "\n")
+
 	finalIntcode = intcodeProgram.currentProgram
 	return
 }
@@ -143,9 +247,8 @@ func newIntcodeProgramWithNounVerb(program string, noun int, verb int) *IntcodeP
 	return &instance
 }
 
-func (ip *IntcodeProgram) execute(inputs ...string) (output string) {
+func (ip *IntcodeProgram) execute(input <-chan string, output chan<- string, done chan<- bool) {
 	currentPosition := 0
-	output = ""
 
 	for {
 		opcode := ip.positions[currentPosition]
@@ -190,16 +293,11 @@ func (ip *IntcodeProgram) execute(inputs ...string) (output string) {
 			currentPosition += 4
 		case opcode == "3" || opcode == "03":
 			storePosition, _ := strconv.Atoi(ip.positions[currentPosition+1])
-			ip.positions[storePosition] = inputs[0]
-			inputs = inputs[1:]
+			ip.positions[storePosition] = <-input
 			currentPosition += 2
 		case opcode == "4" || opcode == "04":
 			firstOperant := ip.getParameter(currentPosition+1, modeParam1)
-
-			if output != "" {
-				output = fmt.Sprintln(output)
-			}
-			output = fmt.Sprint(output, firstOperant)
+			output <- fmt.Sprint(firstOperant)
 			currentPosition += 2
 		case opcode == "5" || opcode == "05": // jump-if-true
 			firstParam := ip.getParameter(currentPosition+1, modeParam1)
@@ -238,12 +336,13 @@ func (ip *IntcodeProgram) execute(inputs ...string) (output string) {
 			}
 			currentPosition += 4
 		default:
-			panic("unknown opcode")
+			panic("unknown opcode:" + opcode)
 		}
 	}
 
 	ip.currentProgram = strings.Join(ip.positions, ",")
-	return
+
+	done <- true
 }
 
 func (ip *IntcodeProgram) getParameter(position int, mode ParameterMode) int {
