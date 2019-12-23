@@ -114,11 +114,11 @@ func getAmplifierSeriesMaxThrusterSignal(intcode string) (phaseSetting string, t
 
 func runAmplifierSeries(intcode string, phaseSetting ...string) (thrusterSignal string) {
 
-	ampA := newIntcodeProgram(intcode)
-	ampB := newIntcodeProgram(intcode)
-	ampC := newIntcodeProgram(intcode)
-	ampD := newIntcodeProgram(intcode)
-	ampE := newIntcodeProgram(intcode)
+	ampA := NewIntcodeProgram(intcode)
+	ampB := NewIntcodeProgram(intcode)
+	ampC := NewIntcodeProgram(intcode)
+	ampD := NewIntcodeProgram(intcode)
+	ampE := NewIntcodeProgram(intcode)
 
 	inputAChan := make(chan string, 2)
 	outputAChan := make(chan string, 1)
@@ -138,18 +138,18 @@ func runAmplifierSeries(intcode string, phaseSetting ...string) (thrusterSignal 
 	outputCChan <- phaseSetting[3]
 	outputDChan <- phaseSetting[4]
 
-	go ampA.execute(inputAChan, outputAChan, doneA)
-	go ampB.execute(outputAChan, outputBChan, doneB)
-	go ampC.execute(outputBChan, outputCChan, doneC)
-	go ampD.execute(outputCChan, outputDChan, doneD)
-	go ampE.execute(outputDChan, inputAChan, doneE)
+	go ampA.Execute(inputAChan, outputAChan, doneA)
+	go ampB.Execute(outputAChan, outputBChan, doneB)
+	go ampC.Execute(outputBChan, outputCChan, doneC)
+	go ampD.Execute(outputCChan, outputDChan, doneD)
+	go ampE.Execute(outputDChan, inputAChan, doneE)
 
 	<-doneE
 	return <-inputAChan
 }
 
 func run(intcode string, inputs ...string) (finalIntcode string, output string) {
-	intcodeProgram := newIntcodeProgram(intcode)
+	intcodeProgram := NewIntcodeProgram(intcode)
 
 	inputChan := make(chan string)
 	for _, i := range inputs {
@@ -158,7 +158,7 @@ func run(intcode string, inputs ...string) (finalIntcode string, output string) 
 
 	outputChan := make(chan string, 100)
 	done := make(chan bool, 1)
-	go intcodeProgram.execute(inputChan, outputChan, done)
+	go intcodeProgram.Execute(inputChan, outputChan, done)
 	<-done
 
 	var outputs []string
@@ -181,7 +181,7 @@ func runWithNounVerb(intcode string, noun int, verb int, inputs ...string) (fina
 
 	outputChan := make(chan string, 100)
 	done := make(chan bool, 1)
-	go intcodeProgram.execute(inputChan, outputChan, done)
+	go intcodeProgram.Execute(inputChan, outputChan, done)
 	<-done
 
 	var outputs []string
@@ -210,7 +210,7 @@ type IntcodeProgram struct {
 	relativeBase int
 }
 
-func newIntcodeProgram(program string) *IntcodeProgram {
+func NewIntcodeProgram(program string) *IntcodeProgram {
 	return newIntcodeProgramWithNounVerb(program, -1, -1)
 }
 
@@ -240,7 +240,7 @@ func toParameterMode(modeBit byte) ParameterMode {
 	return ParameterMode(tmp)
 }
 
-func (ip *IntcodeProgram) execute(input <-chan string, output chan<- string, done chan<- bool) {
+func (ip *IntcodeProgram) Execute(input <-chan string, output chan<- string, done chan<- bool) {
 	currentPosition := 0
 
 	for {

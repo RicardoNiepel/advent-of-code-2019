@@ -52,8 +52,6 @@ func getRotatingLaserAngleFromCoordAngle(angle float64) float64 {
 	}
 
 	return tmp
-
-	// return 360 - tmp
 }
 
 func getBestStationAsteroid(rawMap string) (bestStation asteroid, detectedAsteroids []asteroid, spaceMap [][]string) {
